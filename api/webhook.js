@@ -8,11 +8,12 @@ const supabase = createClient(
 
 module.exports = async function(req, res) {
   const sig = req.headers['stripe-signature'];
+  const body = await getRawBody(req);
   let event;
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, sig, process.env.STRIPE_WEBHOOK_SECRET
+      body, sig, process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -31,3 +32,15 @@ module.exports = async function(req, res) {
       status: 'paid'
     });
   }
+
+  res.json({ received: true });
+};
+
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => data += chunk);
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
