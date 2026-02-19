@@ -31,22 +31,3 @@ module.exports = async function(req, res) {
       status: 'paid'
     });
   }
-
-  res.json({ received: true });
-};
-```
-
-**3.6 Déployer sur Vercel**
-1. Sur github.com → créez un repository `echodemotion-backend`
-2. Uploadez vos 3 fichiers (bouton Add file → Upload files)
-3. Sur vercel.com → Add New Project → connectez le repo GitHub → Deploy
-
-Vercel vous donne une URL comme `echodemotion-backend.vercel.app` — notez-la !
-
-**3.7 Ajouter les variables sur Vercel**
-Settings → Environment Variables, ajoutez ces 4 variables :
-```
-STRIPE_SECRET_KEY     → sk_live_votre_cle
-STRIPE_WEBHOOK_SECRET → whsec_... (récupéré après l'étape suivante)
-SUPABASE_URL          → https://abcxyz.supabase.co
-SUPABASE_SERVICE_KEY  → eyJh... (service_role)
