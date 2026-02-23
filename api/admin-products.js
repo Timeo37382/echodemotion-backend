@@ -14,7 +14,7 @@ function isAuth(req) {
   } catch { return false; }
 }
 
-async function sb(path, opts = {}) {
+async function sbFetch(path, opts = {}) {
   const r = await fetch(process.env.SUPABASE_URL + '/rest/v1/' + path, {
     ...opts,
     headers: {
@@ -25,7 +25,10 @@ async function sb(path, opts = {}) {
       ...(opts.headers || {})
     }
   });
-  return { data: await r.json(), ok: r.ok, status: r.status };
+  const text = await r.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch { data = null; }
+  return { data, ok: r.ok, status: r.status };
 }
 
 module.exports = async function handler(req, res) {
@@ -36,39 +39,50 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (!isAuth(req)) return res.status(401).json({ error: 'Non autorisé' });
 
-  // GET : lire les produits
-  // Retourne le tableau "data" stocké dans la première ligne de la table products
+  // ── GET : retourner le tableau de produits ──
   if (req.method === 'GET') {
-    const { data, ok } = await sb('products?select=data&order=id.asc&limit=1');
-    if (!ok) return res.status(500).json({ error: 'Erreur lecture' });
-    // Retourner le tableau de produits directement (comme avant)
-    const products = (data && data.length > 0 && data[0].data) ? data[0].data : [];
-    return res.json(products);
+    const { data, ok } = await sbFetch('products?select=data&order=id.asc&limit=1');
+    if (!ok) return res.status(500).json({ error: 'Erreur lecture Supabase' });
+
+    // Supabase retourne : [{ data: [...produits] }]
+    // On extrait le tableau de produits directement
+    const products = (Array.isArray(data) && data.length > 0 && Array.isArray(data[0].data))
+      ? data[0].data
+      : [];
+
+    return res.status(200).json(products);
   }
 
-  // PATCH : sauvegarder les produits
+  // ── PATCH : sauvegarder le tableau de produits ──
   if (req.method === 'PATCH') {
-    const { products } = req.body;
-    if (!Array.isArray(products)) return res.status(400).json({ error: 'Format invalide' });
+    const { products } = req.body || {};
+    if (!Array.isArray(products)) {
+      return res.status(400).json({ error: 'Format invalide : products doit être un tableau' });
+    }
 
-    // Vérifier si une ligne existe déjà
-    const { data: rows } = await sb('products?select=id&limit=1');
+    // Chercher si une ligne existe déjà
+    const { data: rows, ok: readOk } = await sbFetch('products?select=id&limit=1');
+    if (!readOk) return res.status(500).json({ error: 'Erreur lecture' });
 
     if (!rows || rows.length === 0) {
-      // Première fois : créer la ligne
-      const { data, ok } = await sb('products', {
+      // Aucune ligne → créer
+      const { ok } = await sbFetch('products', {
         method: 'POST',
         body: JSON.stringify({ data: products })
       });
-      return ok ? res.json(data) : res.status(500).json({ error: 'Erreur création' });
+      if (!ok) return res.status(500).json({ error: 'Erreur création' });
+    } else {
+      // Ligne existante → mettre à jour
+      const rowId = rows[0].id;
+      const { ok } = await sbFetch(`products?id=eq.${rowId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ data: products, updated_at: new Date().toISOString() })
+      });
+      if (!ok) return res.status(500).json({ error: 'Erreur mise à jour' });
     }
 
-    // Mettre à jour la ligne existante
-    const { data, ok } = await sb(`products?id=eq.${rows[0].id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ data: products, updated_at: new Date().toISOString() })
-    });
-    return ok ? res.json(data) : res.status(500).json({ error: 'Erreur mise à jour' });
+    // Retourner les produits sauvegardés pour confirmation
+    return res.status(200).json({ ok: true, count: products.length });
   }
 
   return res.status(405).end();
