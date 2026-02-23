@@ -1,3 +1,4 @@
+// api/admin-login.js
 const crypto = require('crypto');
 
 function createToken(secret) {
@@ -22,6 +23,8 @@ module.exports = async function handler(req, res) {
   }
 
   const token = createToken(process.env.ADMIN_SESSION_SECRET);
-  res.setHeader('Set-Cookie', `admin_session=${token}; HttpOnly; Secure; SameSite=Strict; Max-Age=${60*60*8}; Path=/`);
+
+  // SameSite=None obligatoire pour les cookies cross-domaine (echoemotion.com → vercel.app)
+  res.setHeader('Set-Cookie', `admin_session=${token}; HttpOnly; Secure; SameSite=None; Max-Age=${60 * 60 * 8}; Path=/`);
   return res.status(200).json({ ok: true });
 };
