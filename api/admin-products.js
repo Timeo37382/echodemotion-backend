@@ -1,3 +1,4 @@
+// api/admin-products.js
 const crypto = require('crypto');
 
 function isAuth(req) {
@@ -16,9 +17,15 @@ function isAuth(req) {
 async function sb(path, opts = {}) {
   const r = await fetch(process.env.SUPABASE_URL + '/rest/v1/' + path, {
     ...opts,
-    headers: { 'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY, 'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_ROLE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation', ...(opts.headers || {}) }
+    headers: {
+      'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
+      'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_ROLE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+      ...(opts.headers || {})
+    }
   });
-  return { data: await r.json(), ok: r.ok };
+  return { data: await r.json(), ok: r.ok, status: r.status };
 }
 
 module.exports = async function handler(req, res) {
@@ -29,19 +36,38 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (!isAuth(req)) return res.status(401).json({ error: 'Non autorisé' });
 
+  // GET : lire les produits
+  // Retourne le tableau "data" stocké dans la première ligne de la table products
   if (req.method === 'GET') {
-    const { data, ok } = await sb('products?select=*&order=id.asc');
-    return ok ? res.json(data) : res.status(500).json({ error: 'Erreur' });
+    const { data, ok } = await sb('products?select=data&order=id.asc&limit=1');
+    if (!ok) return res.status(500).json({ error: 'Erreur lecture' });
+    // Retourner le tableau de produits directement (comme avant)
+    const products = (data && data.length > 0 && data[0].data) ? data[0].data : [];
+    return res.json(products);
   }
 
+  // PATCH : sauvegarder les produits
   if (req.method === 'PATCH') {
     const { products } = req.body;
+    if (!Array.isArray(products)) return res.status(400).json({ error: 'Format invalide' });
+
+    // Vérifier si une ligne existe déjà
     const { data: rows } = await sb('products?select=id&limit=1');
-    if (!rows || !rows.length) {
-      const { data, ok } = await sb('products', { method: 'POST', body: JSON.stringify({ data: products }) });
+
+    if (!rows || rows.length === 0) {
+      // Première fois : créer la ligne
+      const { data, ok } = await sb('products', {
+        method: 'POST',
+        body: JSON.stringify({ data: products })
+      });
       return ok ? res.json(data) : res.status(500).json({ error: 'Erreur création' });
     }
-    const { data, ok } = await sb(`products?id=eq.${rows[0].id}`, { method: 'PATCH', body: JSON.stringify({ data: products, updated_at: new Date().toISOString() }) });
+
+    // Mettre à jour la ligne existante
+    const { data, ok } = await sb(`products?id=eq.${rows[0].id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ data: products, updated_at: new Date().toISOString() })
+    });
     return ok ? res.json(data) : res.status(500).json({ error: 'Erreur mise à jour' });
   }
 
