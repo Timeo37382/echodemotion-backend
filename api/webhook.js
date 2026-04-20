@@ -1,6 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
+const sanitizeHtml = require('sanitize-html');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -12,8 +13,24 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const SHOP_EMAIL = process.env.SHOP_EMAIL || 'commande@echoemotion.com';
 const SHOP_NAME = process.env.SHOP_NAME || "Echo D'émotion";
 
+// ─── Sanitisation — supprime tout HTML pour éviter les injections XSS ───
+function s(value) {
+  if (value === null || value === undefined) return '';
+  return sanitizeHtml(String(value), { allowedTags: [], allowedAttributes: {} });
+}
+
+// ─── Validation de l'URL (uniquement https://) ───
+function safeUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' ? u.href : '#';
+  } catch {
+    return '#';
+  }
+}
+
 // Désactiver le body parser de Vercel — Stripe a besoin du raw body
-export const config = {
+module.exports.config = {
   api: {
     bodyParser: false,
   },
@@ -60,11 +77,13 @@ module.exports = async function(req, res) {
     const items = JSON.parse(itemsStr);
 
     const total = pi.amount / 100;
+
+    // ─── Sanitiser toutes les données client provenant de Stripe ───
     const customer = {
-      email: pi.metadata.customer_email,
-      name: pi.metadata.customer_name,
-      phone: pi.metadata.customer_phone || '',
-      address: pi.metadata.customer_address || ''
+      email: s(pi.metadata.customer_email),
+      name: s(pi.metadata.customer_name),
+      phone: s(pi.metadata.customer_phone || ''),
+      address: s(pi.metadata.customer_address || '')
     };
 
     // 1. Sauvegarder dans Supabase
@@ -80,14 +99,14 @@ module.exports = async function(req, res) {
       console.error('Supabase insert error:', error);
     }
 
-    const orderId = order?.id?.slice(0, 8).toUpperCase() || pi.id.slice(-8).toUpperCase();
+    const orderId = s(order?.id?.slice(0, 8).toUpperCase() || pi.id.slice(-8).toUpperCase());
 
-    // Lignes produits HTML
+    // Lignes produits HTML — toutes les données sont sanitisées
     const itemsHtml = items.map(i =>
       `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e8ddd0">${i.name}${i.customImage ? ' <span style="background:#c9a96e;color:white;font-size:10px;padding:1px 5px">Personnalisé</span>' : ''}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e8ddd0;text-align:center">${i.qty}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e8ddd0;text-align:right">${(i.price * i.qty).toFixed(2).replace('.', ',')} €</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e8ddd0">${s(i.name)}${i.customImage ? ' <span style="background:#c9a96e;color:white;font-size:10px;padding:1px 5px">Personnalisé</span>' : ''}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e8ddd0;text-align:center">${Number(i.qty)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e8ddd0;text-align:right">${(Number(i.price) * Number(i.qty)).toFixed(2).replace('.', ',')} €</td>
       </tr>`
     ).join('');
 
@@ -172,7 +191,7 @@ module.exports = async function(req, res) {
     <div style="background:#fff8f0;padding:16px;border:1px solid #c9a96e;margin-top:16px">
       <p style="margin:0 0 10px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#c9a96e">⚠️ Images personnalisées à télécharger</p>
       ${items.filter(i => i.customImage).map(i => `
-        <p style="margin:4px 0;font-size:13px;color:#3a2e26">${i.name} : <a href="${i.customImage}" style="color:#c9a96e">Voir l'image →</a></p>
+        <p style="margin:4px 0;font-size:13px;color:#3a2e26">${s(i.name)} : <a href="${safeUrl(i.customImage)}" style="color:#c9a96e">Voir l'image →</a></p>
       `).join('')}
     </div>` : ''}
   </div>
