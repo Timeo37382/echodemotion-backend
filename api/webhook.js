@@ -45,7 +45,20 @@ module.exports = async function(req, res) {
 
   if (event.type === 'payment_intent.succeeded') {
     const pi = event.data.object;
-    const items = JSON.parse(pi.metadata.items || '[]');
+    
+    // Reconstruire les items s'ils ont été divisés en plusieurs chunks (limite 500 chars Stripe)
+    let itemsStr = '';
+    if (pi.metadata.items_0) {
+      let i = 0;
+      while (pi.metadata[`items_${i}`]) {
+        itemsStr += pi.metadata[`items_${i}`];
+        i++;
+      }
+    } else {
+      itemsStr = pi.metadata.items || '[]';
+    }
+    const items = JSON.parse(itemsStr);
+
     const total = pi.amount / 100;
     const customer = {
       email: pi.metadata.customer_email,
