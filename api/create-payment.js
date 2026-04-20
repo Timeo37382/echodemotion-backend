@@ -10,16 +10,25 @@ module.exports = async function(req, res) {
   const { amount, customer, items } = req.body;
 
   try {
+    const itemsStr = JSON.stringify(items);
+    const metadata = {
+      customer_email: customer.email,
+      customer_name: `${customer.firstName} ${customer.lastName}`,
+      customer_phone: customer.phone || '',
+      customer_address: customer.address || '',
+    };
+    
+    // Divide la chaîne pour passer la limite des 500 caractères de Stripe
+    const chunks = itemsStr.match(/.{1,500}/g) || [];
+    chunks.forEach((chunk, index) => {
+      metadata[`items_${index}`] = chunk;
+    });
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100),
       currency: 'eur',
-      metadata: {
-        customer_email: customer.email,
-        customer_name: `${customer.firstName} ${customer.lastName}`,
-        customer_phone: customer.phone || '',
-        customer_address: customer.address || '',
-        items: JSON.stringify(items)
-      }
+      automatic_payment_methods: { enabled: true },
+      metadata
     });
 
     res.json({ clientSecret: paymentIntent.client_secret });
