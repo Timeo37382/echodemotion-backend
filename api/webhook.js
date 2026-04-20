@@ -99,6 +99,18 @@ module.exports = async function(req, res) {
       console.error('Supabase insert error:', error);
     }
 
+    // Incrémenter le code promo s'il a été utilisé
+    if (pi.metadata.promo_code_id) {
+      try {
+        const { data: promoData } = await supabase.from('promo_codes').select('usage_count').eq('id', pi.metadata.promo_code_id).single();
+        if (promoData) {
+          await supabase.from('promo_codes').update({ usage_count: (promoData.usage_count || 0) + 1 }).eq('id', pi.metadata.promo_code_id);
+        }
+      } catch (e) {
+        console.error('Erreur MAJ promo code:', e);
+      }
+    }
+
     const orderId = s(order?.id?.slice(0, 8).toUpperCase() || pi.id.slice(-8).toUpperCase());
 
     // Lignes produits HTML — toutes les données sont sanitisées
