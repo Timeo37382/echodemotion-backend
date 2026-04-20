@@ -144,6 +144,10 @@ module.exports = async function(req, res) {
       metadata[`items_${index}`] = chunk;
     });
 
+    if (promoCodeId) {
+      metadata.promo_code_id = String(promoCodeId);
+    }
+
     // ─── 7. Créer le PaymentIntent Stripe avec le montant calculé CÔTÉ SERVEUR ───
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(total * 100),
@@ -159,3 +163,4 @@ module.exports = async function(req, res) {
     res.status(500).json({ error: err.message });
   }
 };
+
