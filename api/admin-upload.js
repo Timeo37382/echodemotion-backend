@@ -24,12 +24,14 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   try {
-    const fileName = req.headers['x-file-name'];
+    const path = require('path');
+    const rawFileName = req.headers['x-file-name'];
     const fileType = req.headers['x-file-type'];
 
-    if (!fileName || !fileType) {
+    if (!rawFileName || !fileType) {
       return res.status(400).json({ error: 'Nom ou type de fichier manquant' });
     }
+    const fileName = path.basename(rawFileName);
 
     // Lire le body brut (le fichier binaire)
     const chunks = [];
