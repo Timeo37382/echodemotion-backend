@@ -13,6 +13,10 @@ module.exports = async function(req, res) {
 
   const { orderId, customer, items, total } = req.body;
 
+  if (req.headers['x-admin-secret'] !== process.env.ADMIN_SESSION_SECRET) {
+    return res.status(401).json({ error: 'Non autorisé' });
+  }
+
   if (!customer?.email) {
     return res.status(400).json({ error: 'Missing customer email' });
   }
