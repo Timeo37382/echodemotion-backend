@@ -49,7 +49,10 @@ module.exports = async function handler(req, res) {
     if (ok && status === 'shipped' && order) {
       fetch(process.env.BACKEND_URL + '/api/send-shipped', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-secret': process.env.ADMIN_SESSION_SECRET 
+        },
         body: JSON.stringify({ orderId: order.id, customer: order.customer, items: order.items, total: order.total })
       }).catch(() => {});
     }
