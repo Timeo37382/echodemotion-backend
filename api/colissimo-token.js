@@ -1,4 +1,3 @@
-const fetch = require('node-fetch');
 
 const ALLOWED_ORIGIN = 'https://echoemotion.com';
 
